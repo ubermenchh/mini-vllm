@@ -6,11 +6,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-def IST_converter(*args):
+def IST_converter(seconds, what=None):
     ist_offset = 19800 # 5H: 18000 secs, 30M: 1800 secs
-    utc_time = time.gmtime(time.time() + ist_offset)
-    return utc_time
-
+    return time.gmtime(seconds + ist_offset)
 logging.Formatter.converter = IST_converter
 logging.basicConfig(
     level=logging.INFO,
@@ -31,7 +29,7 @@ image = (
         "einops",
         "numpy<2.0.0",
         "accelerate",
-        "dotenv",
+        "python-dotenv",
         "hf_transfer"
     )
     .env({"HF_HUB_ENABLE_HF_TRANSFER": "1"}) # to avoid model download every time

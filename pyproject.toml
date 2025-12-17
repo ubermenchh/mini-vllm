@@ -1,7 +1,7 @@
 [project]
 name = "mini-vllm"
 version = "0.1.0"
-description = "Add your description here"
+description = "An educational implementation of an inference engine"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
