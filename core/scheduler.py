@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Deque, Dict
+from typing import Deque, Dict, List
 import collections
 
 BLOCK_SIZE = 16
@@ -43,3 +43,37 @@ class BlockAllocator:
 
     def get_num_free_blocks(self) -> int:
         return len(self.free_blocks)
+
+
+class BlockSpaceManager:
+    def __init__(self, block_allocator: BlockAllocator):
+        self.allocator = block_allocator
+        self.block_size = self.allocator.block_size
+        # map: seq_id --> list of PhysicalTokenBlock
+        self.block_tables: Dict[int, List[PhysicalTokenBlock]] = {}
+
+    def allocate(self, seq_id: int, num_tokens: int):
+        # calculate the number for blocks need to be allocated
+        num_blocks = (num_tokens + self.block_size - 1) // self.block_size
+        # allocate each block in the block table
+        self.block_tables[seq_id] = [self.allocator.allocate() for _ in range(num_blocks)]
+
+    def append_slot(self, seq_id: int, current_num_tokens: int):
+        # if we have space in the previous block, do nothing
+        if current_num_tokens % self.block_size != 0:
+            return
+        
+        # allocate more blocks if there is no space
+        self.block_tables[seq_id].append(self.allocator.allocate())
+
+    def free(self, seq_id):
+        # if seq_id is not in the block tables, do nothing
+        if seq_id not in self.block_tables:
+            return 
+
+        # iterate and free the blocks in the block table
+        for physical_block in self.block_tables[seq_id]:
+            self.allocator.free(physical_block)
+
+        # delete the entry from the dict as well
+        del self.block_tables[seq_id]
