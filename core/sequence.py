@@ -36,12 +36,16 @@ class SequenceGroup:
         arrival_time: float
     ):
         self.request_id = request_id
+
+        if len(seqs) != len(set(seq.seq_id for seq in seqs)):
+            raise ValueError("Duplicate seq_id found in sequences")
+
         self.seqs_dict = {seq.seq_id: seq for seq in seqs}
         self.arrival_time = arrival_time
 
     def get_seqs(self, status: Optional[SequenceStatus]=None) -> List[Sequence]:
         if not status:
-            return [seq for _, seq in self.seqs_dict.items()]
+            return list(self.seqs_dict.values())
         return [seq for seq in self.seqs_dict.values() if seq.status == status]
 
     def is_finished(self) -> bool:
