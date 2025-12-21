@@ -1,6 +1,6 @@
+import collections
 from dataclasses import dataclass
 from typing import Deque, Dict, List
-import collections
 
 BLOCK_SIZE = 16
 
@@ -12,7 +12,7 @@ class PhysicalTokenBlock:
     ref_count: int = 0
 
 class BlockAllocator:
-    def __init__(self, num_blocks: int, block_size: int, device: str="cuda"):
+    def __init__(self, num_blocks: int, block_size: int=BLOCK_SIZE, device: str="cuda"):
         self.num_blocks = num_blocks
         self.block_size = block_size
         self.device = device
@@ -95,4 +95,4 @@ class BlockSpaceManager:
 
     def can_allocate(self, num_tokens: int) -> bool:
         num_blocks_needed = (num_tokens + self.allocator.block_size - 1) // self.allocator.block_size
-        return len(self.allocator.free_blocks) > num_blocks_needed
+        return len(self.allocator.free_blocks) >= num_blocks_needed

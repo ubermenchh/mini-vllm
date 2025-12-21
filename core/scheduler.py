@@ -1,7 +1,9 @@
-from typing import List, Deque
 from collections import deque
+from typing import Deque, List
+
 from core.block_manager import BlockSpaceManager
 from core.sequence import SequenceGroup
+
 
 class Scheduler:
     def __init__(self, block_manager: BlockSpaceManager):
@@ -13,7 +15,7 @@ class Scheduler:
     def add_sequence_group(self, seq_group: SequenceGroup):
         self.waiting.append(seq_group)
 
-    def schedule(self):
+    def schedule(self) -> List[SequenceGroup]:
         while self.waiting:
             seq_group = self.waiting[0]
 

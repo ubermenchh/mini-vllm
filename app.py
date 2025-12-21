@@ -1,15 +1,17 @@
+import logging
 import os
 import time
+
 import modal
-import logging
 from dotenv import load_dotenv
 
 load_dotenv()
 
-def IST_converter(seconds, what=None):
-    ist_offset = 19800 # 5H: 18000 secs, 30M: 1800 secs
-    return time.gmtime(seconds + ist_offset)
-logging.Formatter.converter = IST_converter
+# def IST_converter(seconds):
+#     ist_offset = 19800 # 5H: 18000 secs, 30M: 1800 secs
+#     return time.gmtime(seconds + ist_offset)
+
+# logging.Formatter.converter= IST_converter
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
@@ -33,31 +35,38 @@ image = (
         "hf_transfer"
     )
     .env({"HF_HUB_ENABLE_HF_TRANSFER": "1"}) # to avoid model download every time
+    .add_local_dir("core", remote_path="/root/core")
 )
 
-MODEL_NAME = "google/gemma-3-270m"
+# MODEL_NAME = "google/gemma-3-270m"
+MODEL_NAME = "openai-community/gpt2"
 GPU_CONFIG = "A100"
 
 @app.cls(
     gpu=GPU_CONFIG,
     image=image,
     timeout=600,
-    secrets=[modal.Secret.from_dict({"HF_TOKEN": os.getenv("HF_TOKEN")})])
+    secrets=[modal.Secret.from_dict({"HF_TOKEN": os.getenv("HF_TOKEN")})],
+)
 class InferenceEngine:
     @modal.enter()
     def load_model(self):
-        import torch
-        from transformers import AutoTokenizer, AutoModelForCausalLM
+        # import torch
+        # from transformers import AutoModelForCausalLM, AutoTokenizer
+        from transformers import AutoTokenizer
+
+        from core.llm_engine import LLMEngine
 
         logger.info(f"Loading model {MODEL_NAME}...")
         t0 = time.time()
 
         self.tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-        self.model = AutoModelForCausalLM.from_pretrained(
-            MODEL_NAME,
-            dtype=torch.bfloat16,
-            device_map="auto"
-        )
+        # self.model = AutoModelForCausalLM.from_pretrained(
+        #     MODEL_NAME,
+        #     dtype=torch.bfloat16,
+        #     device_map="auto"
+        # )
+        self.engine = LLMEngine(MODEL_NAME)
 
         logger.info(f"Model loaded in {time.time() - t0:.2f}s")
 
@@ -66,18 +75,26 @@ class InferenceEngine:
         import time
         t0= time.time()
 
-        inputs = self.tokenizer(prompt, return_tensors="pt").to("cuda")
+        # inputs = self.tokenizer(prompt, return_tensors="pt").to("cuda")
 
-        outputs = self.model.generate(
-            **inputs,
-            max_new_tokens=20
-        )
+        # outputs = self.model.generate(
+        #     **inputs,
+        #     max_new_tokens=20
+        # )
 
-        generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+        # generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+        req_id = self.engine.add_request(prompt)
+
+        final_text = ""
+        for _ in range(20):
+            outputs = self.engine.step()
+            if req_id in outputs:
+                final_text = outputs[req_id]
+
         duration = time.time() - t0
 
         return {
-            "text": generated_text,
+            "text": final_text,
             "duration_sec": duration
         }
 
