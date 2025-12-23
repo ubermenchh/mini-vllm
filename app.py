@@ -7,11 +7,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# def IST_converter(seconds):
-#     ist_offset = 19800 # 5H: 18000 secs, 30M: 1800 secs
-#     return time.gmtime(seconds + ist_offset)
-
-# logging.Formatter.converter= IST_converter
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
@@ -38,8 +33,8 @@ image = (
     .add_local_dir("core", remote_path="/root/core")
 )
 
-# MODEL_NAME = "google/gemma-3-270m"
-MODEL_NAME = "openai-community/gpt2"
+MODEL_NAME = "google/gemma-3-270m"
+# MODEL_NAME = "openai-community/gpt2"
 GPU_CONFIG = "A100"
 
 @app.cls(

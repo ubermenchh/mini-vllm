@@ -14,7 +14,7 @@ class LLMEngine:
         self.block_manager = BlockSpaceManager(self.allocator)
         self.scheduler = Scheduler(self.block_manager)
 
-        self.model_executor = ModelExecutor(model_name)
+        self.model_executor = ModelExecutor(model_name, num_gpu_blocks, block_size)
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
 
         self.request_counter = 0
@@ -54,15 +54,19 @@ class LLMEngine:
         pad_id = self.tokenizer.pad_token_id if self.tokenizer.pad_token_id is not None else 0
 
         padded_inputs = []
+        attention_masks = []
+
         for tokens in all_token_ids:
             num_pad = max_len - len(tokens)
 
             padded_inputs.append(tokens + [pad_id] * num_pad)
+            attention_masks.append([1] * len(tokens) + [0] * num_pad)
 
         input_tensor = torch.tensor(padded_inputs, device=self.device, dtype=torch.long)
+        mask_tensor = torch.tensor(attention_masks, device=self.device, dtype=torch.long)
 
         # 3. Model Forward
-        logits = self.model_executor.forward(input_tensor)
+        logits = self.model_executor.forward(input_tensor, mask_tensor)
 
         # 4. Sample and update
         outputs = {}
