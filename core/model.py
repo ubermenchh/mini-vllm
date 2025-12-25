@@ -71,12 +71,12 @@ class ModelExecutor:
             return self._paged_attention_forward(module, hidden_states, *args, **kwargs)
         return forward_wrapper
 
-    def forward(self, input_ids: torch.Tensor, context_lens: torch.Tensor, block_tables: torch.Tensor, is_prefill: bool=False):
+    def forward(self, input_ids: torch.Tensor, position_ids: torch.Tensor, context_lens: torch.Tensor, block_tables: torch.Tensor, is_prefill: bool=False):
         self.context_lens = context_lens
         self.block_tables = block_tables
         self.is_prefill = is_prefill
 
-        outputs = self.model(input_ids=input_ids)
+        outputs = self.model(input_ids=input_ids, position_ids=position_ids)
         return outputs.logits
 
     def _paged_attention_forward(self, module, hidden_states: torch.Tensor, *args, **kwargs):

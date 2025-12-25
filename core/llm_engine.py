@@ -49,6 +49,7 @@ class LLMEngine:
 
         # 2. Prepare Inputs
         input_ids_list = []
+        position_ids_list = []
         context_lens_list = []
         block_tables_list = []
 
@@ -57,8 +58,10 @@ class LLMEngine:
             
             if is_prefill:
                 input_ids_list.append(seq.get_token_ids())
+                position_ids_list.append(list(range(seq.get_len())))
             else:
                 input_ids_list.append(seq.get_token_ids()[-1])
+                position_ids_list.append(seq.get_len() - 1)
             context_lens_list.append(seq.get_len())
             block_tables_list.append(self.block_manager.get_block_table(seq.seq_id))
 
@@ -71,8 +74,14 @@ class LLMEngine:
                 batch_first=True,
                 padding_value=pad_id
             ).to(self.device)
+            position_tensor = torch.nn.utils.rnn.pad_sequence(
+                [torch.tensor(ids) for ids in position_ids_list],
+                batch_first=True,
+                padding_value=pad_id
+            ).to(self.device)
         else:
             input_tensor = torch.tensor(input_ids_list, device=self.device, dtype=torch.long).unsqueeze(1) # [batch_size, 1]
+            position_tensor = torch.tensor(position_ids_list, device=self.device, dtype=torch.long).unsqueeze(1)
 
         padded_block_tables = []
         for blocks in block_tables_list:
@@ -84,7 +93,7 @@ class LLMEngine:
         block_tables_tensor = torch.tensor(padded_block_tables, device=self.device, dtype=torch.int32) # [batch_size, max_num_blocks]
 
         # 3. Model Forward
-        logits = self.model_executor.forward(input_tensor, context_lens_tensor, block_tables_tensor, is_prefill)
+        logits = self.model_executor.forward(input_tensor, position_tensor, context_lens_tensor, block_tables_tensor, is_prefill)
 
         # 4. Sample and update
         outputs = {}
