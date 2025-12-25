@@ -35,7 +35,8 @@ image = (
 )
 
 # MODEL_NAME = "google/gemma-3-270m"
-MODEL_NAME = "openai-community/gpt2"
+# MODEL_NAME = "openai-community/gpt2"
+MODEL_NAME = "meta-llama/Llama-3.2-1B"
 GPU_CONFIG = "A100"
 
 @app.cls(
@@ -62,7 +63,7 @@ class InferenceEngine:
         #     dtype=torch.bfloat16,
         #     device_map="auto"
         # )
-        self.engine = LLMEngine(MODEL_NAME)
+        self.engine = LLMEngine(MODEL_NAME, num_gpu_blocks=5000)
 
         logger.info(f"Model loaded in {time.time() - t0:.2f}s")
 
@@ -82,10 +83,21 @@ class InferenceEngine:
         req_id = self.engine.add_request(prompt)
 
         final_text = ""
-        for _ in range(20):
+        token_count = 0
+        while True:
             outputs = self.engine.step()
+            token_count += 1
             if req_id in outputs:
                 final_text = outputs[req_id]
+                pass
+            else:
+                if final_text:
+                    break
+                if not outputs:
+                    break
+            
+            if token_count > 100:
+                break
 
         duration = time.time() - t0
 

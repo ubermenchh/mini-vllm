@@ -16,6 +16,7 @@ class LLMEngine:
 
         self.model_executor = ModelExecutor(model_name, num_gpu_blocks, block_size)
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.eos_token_id = self.tokenizer.eos_token_id
 
         self.request_counter = 0
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -37,6 +38,7 @@ class LLMEngine:
         self.scheduler.add_sequence_group(group)
         return req_id
 
+    @torch.inference_mode()
     def step(self):
         # 1. Schedule
         running_groups = self.scheduler.schedule()
@@ -105,10 +107,9 @@ class LLMEngine:
             
             # Apply temperature
             temperature = 0.7
-            next_token_logits = next_token_logits / temperature
             
             # Apply softmax to get probs
-            probs = torch.softmax(next_token_logits, dim=-1)
+            probs = torch.softmax(next_token_logits / temperature, dim=-1)
 
             # Apply top-p (nucleus) sampling
             top_p = 0.9
@@ -125,7 +126,13 @@ class LLMEngine:
 
             seq.append_token_id(next_token_id, 1.0)
 
-            self.block_manager.append_slot(seq.seq_id, seq.get_len() - 1)
+            from core.sequence import SequenceStatus
+
+            if next_token_id == self.eos_token_id:
+                seq.status = SequenceStatus.FINISHED
+                self.block_manager.free(seq.seq_id)
+            else:
+                self.block_manager.append_slot(seq.seq_id, seq.get_len() - 1)
 
             outputs[group.request_id] = self.tokenizer.decode(seq.get_token_ids())
 
