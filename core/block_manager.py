@@ -96,3 +96,8 @@ class BlockSpaceManager:
     def can_allocate(self, num_tokens: int) -> bool:
         num_blocks_needed = (num_tokens + self.allocator.block_size - 1) // self.allocator.block_size
         return len(self.allocator.free_blocks) >= num_blocks_needed
+
+    def get_block_table(self, seq_id: int) -> List[int]:
+        if seq_id not in self.block_tables:
+            return []
+        return [block.block_num for block in self.block_tables[seq_id]]

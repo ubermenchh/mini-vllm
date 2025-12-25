@@ -43,41 +43,76 @@ class LLMEngine:
         if not running_groups:
             return {}
 
-        # 2. Prepare Inputs (Naive Batching)
-        all_token_ids = []
+        # determine if this is prefill phase
+        first_seq = running_groups[0].get_seqs()[0]
+        is_prefill = len(first_seq.output_token_ids) == 0
+
+        # 2. Prepare Inputs
+        input_ids_list = []
+        context_lens_list = []
+        block_tables_list = []
+
         for group in running_groups:
             seq = group.get_seqs()[0]
-            all_token_ids.append(seq.get_token_ids())
+            
+            if is_prefill:
+                input_ids_list.append(seq.get_token_ids())
+            else:
+                input_ids_list.append(seq.get_token_ids()[-1])
+            context_lens_list.append(seq.get_len())
+            block_tables_list.append(self.block_manager.get_block_table(seq.seq_id))
 
-        # max length for padding
-        max_len = max([len(ids) for ids in all_token_ids])
+        max_num_blocks = max([len(block_table) for block_table in block_tables_list])
         pad_id = self.tokenizer.pad_token_id if self.tokenizer.pad_token_id is not None else 0
 
-        padded_inputs = []
-        attention_masks = []
+        if is_prefill:
+            input_tensor = torch.nn.utils.rnn.pad_sequence(
+                [torch.tensor(ids) for ids in input_ids_list],
+                batch_first=True,
+                padding_value=pad_id
+            ).to(self.device)
+        else:
+            input_tensor = torch.tensor(input_ids_list, device=self.device, dtype=torch.long).unsqueeze(1) # [batch_size, 1]
 
-        for tokens in all_token_ids:
-            num_pad = max_len - len(tokens)
+        padded_block_tables = []
+        for blocks in block_tables_list:
+            num_pad = max_num_blocks - len(blocks)
+            padded_block_tables.append(blocks + [-1] * num_pad)
 
-            padded_inputs.append(tokens + [pad_id] * num_pad)
-            attention_masks.append([1] * len(tokens) + [0] * num_pad)
-
-        input_tensor = torch.tensor(padded_inputs, device=self.device, dtype=torch.long)
-        mask_tensor = torch.tensor(attention_masks, device=self.device, dtype=torch.long)
+        # Create Tensors
+        context_lens_tensor = torch.tensor(context_lens_list, device=self.device, dtype=torch.int32)   # [batch_size]
+        block_tables_tensor = torch.tensor(padded_block_tables, device=self.device, dtype=torch.int32) # [batch_size, max_num_blocks]
 
         # 3. Model Forward
-        logits = self.model_executor.forward(input_tensor, mask_tensor)
+        logits = self.model_executor.forward(input_tensor, context_lens_tensor, block_tables_tensor, is_prefill)
 
         # 4. Sample and update
         outputs = {}
         for i, group in enumerate(running_groups):
             seq = group.get_seqs()[0]
+    
+            logit_idx = (context_lens_list[i] - 1) if is_prefill else 0
+            next_token_logits = logits[i, logit_idx, :] # Shape: [vocab_size]
+            
+            # Apply temperature
+            temperature = 0.7
+            next_token_logits = next_token_logits / temperature
+            
+            # Apply softmax to get probs
+            probs = torch.softmax(next_token_logits, dim=-1)
 
-            last_idx = len(seq.get_token_ids()) - 1
+            # Apply top-p (nucleus) sampling
+            top_p = 0.9
+            sorted_probs, sorted_indices = torch.sort(probs, descending=True)
+            cum_probs = torch.cumsum(sorted_probs, dim=-1)
+            sorted_indices_to_remove = cum_probs > top_p
+            sorted_indices_to_remove[0] = False # Keep the top token
+            sorted_probs[sorted_indices_to_remove] = 0
+            sorted_probs = sorted_probs / sorted_probs.sum()
 
-            next_token_logits = logits[i, last_idx, :] # Shape: [vocab_size]
-
-            next_token_id = torch.argmax(next_token_logits).item()
+            # Sample from filtered distribution
+            sampled_idx = torch.multinomial(sorted_probs, num_samples=1).item()
+            next_token_id = sorted_indices[sampled_idx].item()
 
             seq.append_token_id(next_token_id, 1.0)
 

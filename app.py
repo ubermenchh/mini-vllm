@@ -31,10 +31,11 @@ image = (
     )
     .env({"HF_HUB_ENABLE_HF_TRANSFER": "1"}) # to avoid model download every time
     .add_local_dir("core", remote_path="/root/core")
+    .add_local_dir("kernels", remote_path="/root/kernels")
 )
 
-MODEL_NAME = "google/gemma-3-270m"
-# MODEL_NAME = "openai-community/gpt2"
+# MODEL_NAME = "google/gemma-3-270m"
+MODEL_NAME = "openai-community/gpt2"
 GPU_CONFIG = "A100"
 
 @app.cls(
