@@ -2,7 +2,7 @@ from typing import Optional
 
 import torch
 from transformers import AutoModelForCausalLM
-from kernels.attention import paged_attention_v1
+from kernels.attention import paged_attention_v1, paged_attention_triton, _paged_attention_kernel
 
 def rotate_half(x: torch.Tensor):
     x1 = x[..., :x.shape[-1] // 2]
@@ -184,7 +184,8 @@ class ModelExecutor:
             scale = 1.0 / (executor.head_dim ** 0.5)
             
             # Run Paged Attention Kernel
-            attn_output = paged_attention_v1(query, k_cache, v_cache, executor.block_tables, executor.context_lens, scale)
+            # attn_output = paged_attention_v1(query, k_cache, v_cache, executor.block_tables, executor.context_lens, scale)
+            attn_output = paged_attention_triton(query, k_cache, v_cache, executor.block_tables, executor.context_lens, scale)
 
             if hasattr(module, "c_proj"):
                 output = module.c_proj(attn_output.view(batch_size, -1))

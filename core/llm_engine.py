@@ -71,18 +71,22 @@ class LLMEngine:
         pad_id = self.tokenizer.pad_token_id if self.tokenizer.pad_token_id is not None else 0
 
         if is_prefill:
+            # input_tensor: [batch_size, max_seq_len]
             input_tensor = torch.nn.utils.rnn.pad_sequence(
                 [torch.tensor(ids) for ids in input_ids_list],
                 batch_first=True,
                 padding_value=pad_id
             ).to(self.device)
+            # position_tensor: [batch_size, max_seq_len]
             position_tensor = torch.nn.utils.rnn.pad_sequence(
                 [torch.tensor(ids) for ids in position_ids_list],
                 batch_first=True,
                 padding_value=pad_id
             ).to(self.device)
         else:
-            input_tensor = torch.tensor(input_ids_list, device=self.device, dtype=torch.long).unsqueeze(1) # [batch_size, 1]
+            # input_tensor: [batch_size, 1]
+            input_tensor = torch.tensor(input_ids_list, device=self.device, dtype=torch.long).unsqueeze(1) 
+            # position_tensor: [batch_size, 1]
             position_tensor = torch.tensor(position_ids_list, device=self.device, dtype=torch.long).unsqueeze(1)
 
         padded_block_tables = []
@@ -91,10 +95,13 @@ class LLMEngine:
             padded_block_tables.append(blocks + [-1] * num_pad)
 
         # Create Tensors
-        context_lens_tensor = torch.tensor(context_lens_list, device=self.device, dtype=torch.int32)   # [batch_size]
-        block_tables_tensor = torch.tensor(padded_block_tables, device=self.device, dtype=torch.int32) # [batch_size, max_num_blocks]
+        # context_lens_tensor: [batch_size]
+        context_lens_tensor = torch.tensor(context_lens_list, device=self.device, dtype=torch.int32)   
+        # block_tables_tensor: [batch_size, max_num_blocks]
+        block_tables_tensor = torch.tensor(padded_block_tables, device=self.device, dtype=torch.int32) 
 
         # 3. Model Forward
+        # logits: [batch_size, seq_len, vocab_size]
         logits = self.model_executor.forward(input_tensor, position_tensor, context_lens_tensor, block_tables_tensor, is_prefill)
 
         # 4. Sample and update
