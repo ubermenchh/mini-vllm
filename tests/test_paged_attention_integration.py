@@ -2,7 +2,6 @@ import torch
 import unittest
 from unittest.mock import MagicMock, patch
 from core.llm_engine import LLMEngine
-from core.model import ModelExecutor
 
 class MockConfig:
     num_attention_heads = 4

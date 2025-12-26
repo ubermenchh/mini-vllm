@@ -1,8 +1,7 @@
-from typing import Optional
 
 import torch
 from transformers import AutoModelForCausalLM
-from kernels.attention import paged_attention_v1, paged_attention_triton, _paged_attention_kernel
+from kernels.attention import paged_attention_triton
 
 def rotate_half(x: torch.Tensor):
     x1 = x[..., :x.shape[-1] // 2]
