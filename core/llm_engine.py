@@ -22,34 +22,27 @@ class LLMEngine:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
     def add_request(self, prompt: str) -> str:
-        # generate ids
         req_id = str(self.request_counter)
         self.request_counter += 1
         seq_id = int(req_id)
 
-        # tokenize
         token_ids = self.tokenizer.encode(prompt)
 
-        # create objects
         seq = Sequence(seq_id, prompt, token_ids)
         group = SequenceGroup(req_id, [seq], arrival_time=0)
 
-        # add to scheduler
         self.scheduler.add_sequence_group(group)
         return req_id
 
     @torch.inference_mode()
     def step(self):
-        # 1. Schedule
         running_groups = self.scheduler.schedule()
         if not running_groups:
             return {}
 
-        # determine if this is prefill phase
         first_seq = running_groups[0].get_seqs()[0]
         is_prefill = len(first_seq.output_token_ids) == 0
 
-        # 2. Prepare Inputs
         input_ids_list = []
         position_ids_list = []
         context_lens_list = []
@@ -94,17 +87,14 @@ class LLMEngine:
             num_pad = max_num_blocks - len(blocks)
             padded_block_tables.append(blocks + [-1] * num_pad)
 
-        # Create Tensors
         # context_lens_tensor: [batch_size]
         context_lens_tensor = torch.tensor(context_lens_list, device=self.device, dtype=torch.int64)   
         # block_tables_tensor: [batch_size, max_num_blocks]
         block_tables_tensor = torch.tensor(padded_block_tables, device=self.device, dtype=torch.int64) 
 
-        # 3. Model Forward
         # logits: [batch_size, seq_len, vocab_size]
         logits = self.model_executor.forward(input_tensor, position_tensor, context_lens_tensor, block_tables_tensor, is_prefill)
 
-        # 4. Sample and update
         outputs = {}
         for i, group in enumerate(running_groups):
             seq = group.get_seqs()[0]
@@ -113,14 +103,11 @@ class LLMEngine:
             next_token_logits = logits[i, -1, :] # Shape: [vocab_size]
             # next_token_id = torch.argmax(next_token_logits).item()
             
-            # # Apply temperature
             temperature = 0.8
             #
-            # # Apply softmax to get probs
             probs = torch.softmax(next_token_logits / temperature, dim=-1)
             next_token_id = torch.multinomial(probs, num_samples=1).item()
             #
-            # # Apply top-p (nucleus) sampling
             # top_p = 0.9
             # sorted_probs, sorted_indices = torch.sort(probs, descending=True)
             # cum_probs = torch.cumsum(sorted_probs, dim=-1)
@@ -129,7 +116,6 @@ class LLMEngine:
             # sorted_probs[sorted_indices_to_remove] = 0
             # sorted_probs = sorted_probs / sorted_probs.sum()
             #
-            # # Sample from filtered distribution
             # sampled_idx = torch.multinomial(sorted_probs, num_samples=1).item()
             # next_token_id = sorted_indices[sampled_idx].item()
 

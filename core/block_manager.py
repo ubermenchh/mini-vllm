@@ -52,14 +52,11 @@ class BlockSpaceManager:
         self.block_tables: Dict[int, List[PhysicalTokenBlock]] = {}
 
     def allocate(self, seq_id: int, num_tokens: int):
-        # free existing blocks if seq_id already exists
         if seq_id in self.block_tables:
             self.free(seq_id)
 
-        # calculate the number of blocks needed to be allocated
         num_blocks = (num_tokens + self.allocator.block_size - 1) // self.allocator.block_size
 
-        # allocate each block in the block table
         blocks = []
         try:
             for _ in range(num_blocks):
@@ -71,7 +68,6 @@ class BlockSpaceManager:
             raise
 
     def append_slot(self, seq_id: int, current_num_tokens: int):
-        # check if seq_id exists
         if seq_id not in self.block_tables:
             raise ValueError(f"Sequence {seq_id} not found in block tables")
         # if we have space in the previous block, do nothing
@@ -82,7 +78,6 @@ class BlockSpaceManager:
         self.block_tables[seq_id].append(self.allocator.allocate())
 
     def free(self, seq_id):
-        # if seq_id is not in the block tables, do nothing
         if seq_id not in self.block_tables:
             return 
 

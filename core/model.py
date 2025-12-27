@@ -110,14 +110,12 @@ class ModelExecutor:
         batch_size, seq_len, _ = hidden_states.shape
         executor = self
 
-        # Reshape to 4D for attention/RoPE
         # query: [batch_size, num_heads, seq_len, head_dim]
         # key:   [batch_size, num_kv_heads, seq_len, head_dim]
         query = query.view(batch_size, seq_len, executor.num_heads, executor.head_dim).transpose(1, 2)
         key = key.view(batch_size, seq_len, executor.num_kv_heads, executor.head_dim).transpose(1, 2)
         value = value.view(batch_size, seq_len, executor.num_kv_heads, executor.head_dim).transpose(1, 2)
 
-        # Check for RoPE
         rotary_emb = getattr(self.model.model, "rotary_emb", None)
         if rotary_emb is not None:
             pos_ids = kwargs.get("position_ids")
@@ -145,7 +143,6 @@ class ModelExecutor:
             else:
                 attn_output = torch.nn.functional.scaled_dot_product_attention(query, key, value, is_causal=True)
 
-            # Scatter tokens to blocks
             for i in range(batch_size):
                 length = executor.context_lens[i]
                 block_table = executor.block_tables[i]
@@ -175,19 +172,16 @@ class ModelExecutor:
             key = key.squeeze(2)
             value = value.squeeze(2)
 
-            # Determine where to write the new token
             last_token_indices = executor.context_lens - 1
             block_indices = executor.block_tables.gather(1, (last_token_indices // executor.block_size).unsqueeze(1).long()).squeeze(1)
             block_offsets = last_token_indices % executor.block_size
 
-            # Write current token to cache
             # k_cache[block_idx, :, offset, :] = key
             k_cache[block_indices, :, block_offsets, :] = key
             v_cache[block_indices, :, block_offsets, :] = value
 
             scale = 1.0 / (executor.head_dim ** 0.5)
             
-            # Run Paged Attention Kernel
             # attn_output = paged_attention_v1(query, k_cache, v_cache, executor.block_tables, executor.context_lens, scale)
             attn_output = paged_attention_triton(query, k_cache, v_cache, executor.block_tables, executor.context_lens, scale)
 
