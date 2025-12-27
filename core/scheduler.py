@@ -16,9 +16,10 @@ class Scheduler:
         self.waiting.append(seq_group)
 
     def schedule(self) -> List[SequenceGroup]:
+        self.running = [g for g in self.running if not g.is_finished()]
+
         while self.waiting:
             seq_group = self.waiting[0]
-
             seq = seq_group.get_seqs()[0]
 
             if self.block_manager.can_allocate(seq.get_len()):

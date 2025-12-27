@@ -96,9 +96,9 @@ class LLMEngine:
 
         # Create Tensors
         # context_lens_tensor: [batch_size]
-        context_lens_tensor = torch.tensor(context_lens_list, device=self.device, dtype=torch.int32)   
+        context_lens_tensor = torch.tensor(context_lens_list, device=self.device, dtype=torch.int64)   
         # block_tables_tensor: [batch_size, max_num_blocks]
-        block_tables_tensor = torch.tensor(padded_block_tables, device=self.device, dtype=torch.int32) 
+        block_tables_tensor = torch.tensor(padded_block_tables, device=self.device, dtype=torch.int64) 
 
         # 3. Model Forward
         # logits: [batch_size, seq_len, vocab_size]
@@ -109,27 +109,29 @@ class LLMEngine:
         for i, group in enumerate(running_groups):
             seq = group.get_seqs()[0]
     
-            logit_idx = (context_lens_list[i] - 1) if is_prefill else 0
-            next_token_logits = logits[i, logit_idx, :] # Shape: [vocab_size]
+            # logit_idx = (context_lens_list[i] - 1) if is_prefill else 0
+            next_token_logits = logits[i, -1, :] # Shape: [vocab_size]
+            # next_token_id = torch.argmax(next_token_logits).item()
             
-            # Apply temperature
-            temperature = 0.7
-            
-            # Apply softmax to get probs
+            # # Apply temperature
+            temperature = 0.8
+            #
+            # # Apply softmax to get probs
             probs = torch.softmax(next_token_logits / temperature, dim=-1)
-
-            # Apply top-p (nucleus) sampling
-            top_p = 0.9
-            sorted_probs, sorted_indices = torch.sort(probs, descending=True)
-            cum_probs = torch.cumsum(sorted_probs, dim=-1)
-            sorted_indices_to_remove = cum_probs > top_p
-            sorted_indices_to_remove[0] = False # Keep the top token
-            sorted_probs[sorted_indices_to_remove] = 0
-            sorted_probs = sorted_probs / sorted_probs.sum()
-
-            # Sample from filtered distribution
-            sampled_idx = torch.multinomial(sorted_probs, num_samples=1).item()
-            next_token_id = sorted_indices[sampled_idx].item()
+            next_token_id = torch.multinomial(probs, num_samples=1).item()
+            #
+            # # Apply top-p (nucleus) sampling
+            # top_p = 0.9
+            # sorted_probs, sorted_indices = torch.sort(probs, descending=True)
+            # cum_probs = torch.cumsum(sorted_probs, dim=-1)
+            # sorted_indices_to_remove = cum_probs > top_p
+            # sorted_indices_to_remove[0] = False # Keep the top token
+            # sorted_probs[sorted_indices_to_remove] = 0
+            # sorted_probs = sorted_probs / sorted_probs.sum()
+            #
+            # # Sample from filtered distribution
+            # sampled_idx = torch.multinomial(sorted_probs, num_samples=1).item()
+            # next_token_id = sorted_indices[sampled_idx].item()
 
             seq.append_token_id(next_token_id, 1.0)
 

@@ -34,9 +34,9 @@ image = (
     .add_local_dir("kernels", remote_path="/root/kernels")
 )
 
-MODEL_NAME = "google/gemma-3-270m"
+# MODEL_NAME = "google/gemma-3-270m"
 # MODEL_NAME = "openai-community/gpt2"
-# MODEL_NAME = "meta-llama/Llama-3.2-1B"
+MODEL_NAME = "meta-llama/Llama-3.2-1B"
 GPU_CONFIG = "A100"
 
 @app.cls(
@@ -96,7 +96,7 @@ class InferenceEngine:
                 if not outputs:
                     break
             
-            if token_count > 100:
+            if token_count > 256:
                 break
 
         duration = time.time() - t0

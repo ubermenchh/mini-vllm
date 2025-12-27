@@ -2,6 +2,7 @@ import torch
 import triton
 import triton.language as tl
 
+
 def paged_attention_v1(
     query: torch.Tensor,        # [num_seqs, num_heads, head_dim]
     key_cache: torch.Tensor,    # [num_blocks, num_kv_heads, block_size, head_dim]
@@ -115,9 +116,10 @@ def _paged_attention_kernel(
         v_ptr_base = v_ptr + physical_block_id * stride_v_batch + kv_head_idx * stride_v_head
 
         k_offsets = offs_block[:, None] * stride_k_x + offs_dim[None, :] * stride_k_dim
+        v_offsets = offs_block[:, None] * stride_v_x + offs_dim[None, :] * stride_v_dim
 
         k = tl.load(k_ptr_base + k_offsets)
-        v = tl.load(v_ptr_base + k_offsets)
+        v = tl.load(v_ptr_base + v_offsets)
 
         score = tl.sum(q[None, :] * k, axis=1)
         score *= scale

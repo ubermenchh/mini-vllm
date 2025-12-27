@@ -1,7 +1,9 @@
 
 import torch
 from transformers import AutoModelForCausalLM
+
 from kernels.attention import paged_attention_triton
+
 
 def rotate_half(x: torch.Tensor):
     x1 = x[..., :x.shape[-1] // 2]
@@ -116,15 +118,18 @@ class ModelExecutor:
         value = value.view(batch_size, seq_len, executor.num_kv_heads, executor.head_dim).transpose(1, 2)
 
         # Check for RoPE
-        if hasattr(module, "rotary_emb"):
-            position_ids = kwargs.get("position_ids")
-            if position_ids is None and len(args) > 0:
-                position_ids = args[0] if isinstance(args[0], torch.Tensor) else None
-            
-            if position_ids is not None:
+        rotary_emb = getattr(self.model.model, "rotary_emb", None)
+        if rotary_emb is not None:
+            pos_ids = kwargs.get("position_ids")
+            if pos_ids is not None:
                 # cos, sin: [batch_size, seq_len, head_dim]
-                cos, sin = module.rotary_emb(value, position_ids) 
+                cos, sin = rotary_emb(value, pos_ids)
                 query, key = apply_rotary_pos_emb(query, key, cos, sin)
+            else:
+                pos_emb = kwargs.get("position_embeddings")
+                if pos_emb is not None:
+                    cos, sin = pos_emb
+                    query, key = apply_rotary_pos_emb(query, key, cos, sin)
 
         layer_idx = module.layer_idx
         # k_cache: [num_blocks, num_kv_heads, block_size, head_dim]
