@@ -1,6 +1,9 @@
 import collections
+import logging
 from dataclasses import dataclass
 from typing import Deque, Dict, List
+
+logger = logging.getLogger(__name__)
 
 BLOCK_SIZE = 16
 
@@ -50,6 +53,41 @@ class BlockSpaceManager:
         self.allocator = block_allocator
         # map: seq_id --> list of PhysicalTokenBlock
         self.block_tables: Dict[int, List[PhysicalTokenBlock]] = {}
+        self.cached_blocks: Dict[int, PhysicalTokenBlock] = {}
+
+    def _compute_block_hash(self, token_ids: List[int]) -> int:
+        return hash(tuple(token_ids))
+
+    def _is_block_cached(self, block: PhysicalTokenBlock) -> bool:
+        return block in self.cached_blocks.values()
+
+    def allocate_with_prefix_cache(self, seq_id: int, token_ids: List[int]):
+        if seq_id in self.block_tables:
+            self.free(seq_id)
+
+        blocks = []
+        block_size = self.allocator.block_size
+
+        for i in range(0, len(token_ids), block_size):
+            chunk = token_ids[i:i+block_size]
+
+            if len(chunk) == block_size:
+                content_hash = self._compute_block_hash(chunk)
+
+                if content_hash in self.cached_blocks:
+                    logger.info(f"CACHE HIT: block {i//block_size} for seq {seq_id}")
+                    block = self.cached_blocks[content_hash]
+                    block.ref_count += 1
+                else:
+                    logger.info(f"CACHE MISS: block {i//block_size} for seq {seq_id}")
+                    block = self.allocator.allocate()
+                    self.cached_blocks[content_hash] = block
+            
+                blocks.append(block)
+            else:
+                blocks.append(self.allocator.allocate())
+        
+        self.block_tables[seq_id] = blocks
 
     def allocate(self, seq_id: int, num_tokens: int):
         if seq_id in self.block_tables:
@@ -82,8 +120,11 @@ class BlockSpaceManager:
             return 
 
         # iterate and free the blocks in the block table
-        for physical_block in self.block_tables[seq_id]:
-            self.allocator.free(physical_block)
+        for block in self.block_tables[seq_id]:
+            if self._is_block_cached(block):
+                block.ref_count -= 1
+            else:
+                self.allocator.free(block)
 
         # delete the entry from the dict as well
         del self.block_tables[seq_id]
@@ -91,6 +132,22 @@ class BlockSpaceManager:
     def can_allocate(self, num_tokens: int) -> bool:
         num_blocks_needed = (num_tokens + self.allocator.block_size - 1) // self.allocator.block_size
         return len(self.allocator.free_blocks) >= num_blocks_needed
+
+    def can_allocate_with_cache(self, token_ids: List[int]) -> bool:
+        block_size = self.allocator.block_size
+        blocks_needed = 0
+
+        for i in range(0, len(token_ids), block_size):
+            chunk = token_ids[i:i+block_size]
+
+            if len(chunk) == block_size:
+                content_hash = self._compute_block_hash(chunk)
+                if content_hash not in self.cached_blocks:
+                    blocks_needed += 1
+            else:
+                blocks_needed += 1
+
+        return self.allocator.get_num_free_blocks() >= blocks_needed
 
     def get_block_table(self, seq_id: int) -> List[int]:
         if seq_id not in self.block_tables:

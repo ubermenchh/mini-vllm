@@ -96,7 +96,7 @@ class TestPagedAttentionIntegration(unittest.TestCase):
         # 4. Run Step 1 (Prefill)
         print("Running Prefill step...")
         with torch.no_grad():
-            outputs = engine.step()
+            engine.step()
         
         # Verify Prefill cache writing
         seq_id = 0
@@ -118,7 +118,7 @@ class TestPagedAttentionIntegration(unittest.TestCase):
         # Now context_len is 4 (3 prompt + 1 generated)
         print("Running Decode step...")
         with torch.no_grad():
-            outputs = engine.step()
+            engine.step()
         
         # Check if 4th token (index 3) was written to Block 1, offset 1
         assert kv_cache[0][0][b1_idx, :, 1, :].abs().sum() > 0.0

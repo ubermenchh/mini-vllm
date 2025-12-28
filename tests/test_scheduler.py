@@ -16,8 +16,8 @@ def test_allocate_single_block():
 
 def test_allocate_all_blocks():
     allocator = BlockAllocator(num_blocks=2, block_size=16)
-    b1 = allocator.allocate()
-    b2 = allocator.allocate()
+    allocator.allocate()
+    allocator.allocate()
     
     assert allocator.get_num_free_blocks() == 0
     

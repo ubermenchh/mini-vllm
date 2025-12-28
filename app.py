@@ -106,14 +106,57 @@ class InferenceEngine:
             "duration_sec": duration
         }
 
+    @modal.method()
+    def generate_batch(self, prompts: list):
+        import time
+        t0 = time.time()
+
+        req_ids = []
+        for prompt in prompts:
+            req_ids.append(self.engine.add_request(prompt))
+
+        current_texts = {req_id: "" for req_id in req_ids}
+        finished = {}
+        token_count = 0
+
+        while len(finished) < len(req_ids):
+            outputs = self.engine.step()
+            token_count += 1
+
+            for req_id in req_ids:
+                if req_id in outputs:
+                    current_texts[req_id] = outputs[req_id]
+                elif req_id not in finished and current_texts[req_id]:
+                    finished[req_id] = current_texts[req_id]
+
+            if token_count > 256:
+                for req_id in req_ids:
+                    if req_id not in finished:
+                        finished[req_id] = current_texts[req_id]
+                break
+
+        return {
+            "texts": finished,
+            "duration_sec": time.time() - t0
+        }
+
 @app.local_entrypoint()
 def main():
-    prompt = "The meaning of life is"
+    # prompt = [
+    #     "The meaning of life is to find",
+    #     "The meaning of life is to give"
+    # ]
+    prompt = [
+        "You are a helpful AI assistant. You always provide detailed, accurate, and thoughtful answers to questions. Please explain the concept of gravity.",
+        "You are a helpful AI assistant. You always provide detailed, accurate, and thoughtful answers to questions. Please describe how plants grow.",
+    ]
     logger.info(f"Sending prompt: '{prompt}'")
 
     engine = InferenceEngine()
-    result = engine.generate.remote(prompt)
+    results = engine.generate_batch.remote(prompt)
+    for req_id, text in results["texts"].items():
+        logger.info(f"[{req_id}]: {text}")
 
-    logger.info("--- Result ---")
-    logger.info(f"Output: {result['text']}")
-    logger.info(f"Time: {result['duration_sec']:.2f}")
+    # logger.info("--- Result ---")
+    # logger.info(f"Output: {result['text']}")
+    # logger.info(f"Time: {result['duration_sec']:.2f}")

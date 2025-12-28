@@ -37,7 +37,7 @@ def test_mixed_batch_bug(mock_model_cls, mock_tokenizer_cls):
     engine.step()
     
     print("Step 1 done")
-    assert forward_inputs[-1]["is_prefill"] == True
+    assert forward_inputs[-1]["is_prefill"]
     assert forward_inputs[-1]["input_ids"].shape == (1, 3) # Batch 1, Seq 3
 
     # 3. Add Request B

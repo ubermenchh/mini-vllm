@@ -22,9 +22,11 @@ class Scheduler:
             seq_group = self.waiting[0]
             seq = seq_group.get_seqs()[0]
 
-            if self.block_manager.can_allocate(seq.get_len()):
+            token_ids = seq.get_token_ids()
+
+            if self.block_manager.can_allocate_with_cache(token_ids):
                 self.waiting.popleft()
-                self.block_manager.allocate(seq.seq_id, seq.get_len())
+                self.block_manager.allocate_with_prefix_cache(seq.seq_id, token_ids)
                 self.running.append(seq_group)
             else:
                 break
