@@ -1,7 +1,10 @@
-import torch
 import unittest
 from unittest.mock import MagicMock, patch
-from core.llm_engine import LLMEngine
+
+import torch
+
+from mini_vllm.llm_engine import LLMEngine
+
 
 class MockConfig:
     num_attention_heads = 4

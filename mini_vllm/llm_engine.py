@@ -1,10 +1,10 @@
 import torch
 from transformers import AutoTokenizer
 
-from core.block_manager import BlockAllocator, BlockSpaceManager
-from core.model import ModelExecutor
-from core.scheduler import Scheduler
-from core.sequence import Sequence, SequenceGroup
+from mini_vllm.block_manager import BlockAllocator, BlockSpaceManager
+from mini_vllm.model import ModelExecutor
+from mini_vllm.scheduler import Scheduler
+from mini_vllm.sequence import Sequence, SequenceGroup
 
 
 class LLMEngine:
@@ -121,7 +121,7 @@ class LLMEngine:
 
             seq.append_token_id(next_token_id, 1.0)
 
-            from core.sequence import SequenceStatus
+            from mini_vllm.sequence import SequenceStatus
 
             if next_token_id == self.eos_token_id:
                 seq.status = SequenceStatus.FINISHED

@@ -1,6 +1,6 @@
 from unittest.mock import patch
 import torch
-from core.llm_engine import LLMEngine
+from mini_vllm.llm_engine import LLMEngine
 
 @patch("core.llm_engine.AutoTokenizer")
 @patch("core.llm_engine.ModelExecutor")

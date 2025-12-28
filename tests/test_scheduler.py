@@ -1,5 +1,5 @@
 import pytest
-from core.scheduler import BlockAllocator, PhysicalTokenBlock
+from mini_vllm.block_manager import BlockAllocator, PhysicalTokenBlock
 
 def test_allocator_initialization():
     allocator = BlockAllocator(num_blocks=10, block_size=16)

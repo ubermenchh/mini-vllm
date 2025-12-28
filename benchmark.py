@@ -23,8 +23,7 @@ mini_vllm_image = (
         "hf_transfer"
     )
     .env({"HF_HUB_ENABLE_HF_TRANSFER": "1"})
-    .add_local_dir("core", remote_path="/root/core")
-    .add_local_dir("kernels", remote_path="/root/kernels")
+    .add_local_dir("mini_vllm", remote_path="/root/mini_vllm")
 )
 
 # Image for vLLM
@@ -52,7 +51,7 @@ PROMPT = "The meaning of life is"
 class MiniVLLMBenchmark:
     @modal.enter()
     def load_model(self):
-        from core.llm_engine import LLMEngine
+        from mini_vllm.llm_engine import LLMEngine
         print(f"[mini-vllm] Loading model {MODEL_NAME}...")
         self.engine = LLMEngine(MODEL_NAME, num_gpu_blocks=5000)
         print("[mini-vllm] Model loaded.")

@@ -2,7 +2,7 @@
 import torch
 from transformers import AutoModelForCausalLM
 
-from kernels.attention import paged_attention_triton
+from mini_vllm.kernels.attention import paged_attention_triton
 
 
 def rotate_half(x: torch.Tensor):

@@ -1,6 +1,6 @@
-from core.block_manager import BlockAllocator, BlockSpaceManager
-from core.scheduler import Scheduler
-from core.sequence import Sequence, SequenceGroup
+from mini_vllm.block_manager import BlockAllocator, BlockSpaceManager
+from mini_vllm.scheduler import Scheduler
+from mini_vllm.sequence import Sequence, SequenceGroup
 
 
 def test_simple_simulation_flow():

@@ -30,8 +30,7 @@ image = (
         "hf_transfer"
     )
     .env({"HF_HUB_ENABLE_HF_TRANSFER": "1"}) # to avoid model download every time
-    .add_local_dir("core", remote_path="/root/core")
-    .add_local_dir("kernels", remote_path="/root/kernels")
+    .add_local_dir("mini_vllm", remote_path="/root/mini_vllm")
 )
 
 # MODEL_NAME = "google/gemma-3-270m"
@@ -52,7 +51,7 @@ class InferenceEngine:
         # from transformers import AutoModelForCausalLM, AutoTokenizer
         from transformers import AutoTokenizer
 
-        from core.llm_engine import LLMEngine
+        from mini_vllm.llm_engine import LLMEngine
 
         logger.info(f"Loading model {MODEL_NAME}...")
         t0 = time.time()

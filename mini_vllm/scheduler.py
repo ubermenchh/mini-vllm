@@ -1,8 +1,8 @@
 from collections import deque
 from typing import Deque, List
 
-from core.block_manager import BlockSpaceManager
-from core.sequence import SequenceGroup
+from mini_vllm.block_manager import BlockSpaceManager
+from mini_vllm.sequence import SequenceGroup
 
 
 class Scheduler:

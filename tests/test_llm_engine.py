@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 import torch
 
-from core.llm_engine import LLMEngine
+from mini_vllm.llm_engine import LLMEngine
 
 
 # Mock the heavy dependencies
