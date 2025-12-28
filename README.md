@@ -1,5 +1,9 @@
 # mini-vllm
 
+<p align="center">
+  <img src="assets/mini-vllm.png" alt="mini-vllm banner" width="800">
+</p>
+
 A minimal implementation of vLLM's core ideas: PagedAttention and continuous batching.
 
 ## Installation
