@@ -1,9 +1,17 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "mini-vllm"
 version = "0.1.0"
 description = "An educational implementation of an inference engine"
 readme = "README.md"
 requires-python = ">=3.12"
+license = {text = "MIT"}
+authors = [{name = "Umang Kaushik"}]
+keywords = ["llm", "inference", "paged-attention", "vllm"]
+
 dependencies = [
     "dotenv>=0.9.9",
     "einops>=0.8.1",
@@ -15,3 +23,6 @@ dependencies = [
     "transformers>=4.57.3",
     "triton>=3.5.1",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["core", "kernels"]
