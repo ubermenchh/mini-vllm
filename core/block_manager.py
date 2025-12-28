@@ -68,7 +68,7 @@ class BlockSpaceManager:
             block = self.cached_blocks[content_hash]
             if block.ref_count == 0:
                 del self.cached_blocks[content_hash]
-                self.allocator.free(block)
+                self.allocator.free_blocks.append(block)
                 logger.info(f"EVICTED: block {block.block_num}")
                 return True
         return False
@@ -170,7 +170,10 @@ class BlockSpaceManager:
             else:
                 blocks_needed += 1
 
-        return self.allocator.get_num_free_blocks() >= blocks_needed
+        evictable_blocks = sum(1 for b in self.cached_blocks.values() if b.ref_count == 0)
+        available_blocks = self.allocator.get_num_free_blocks() + evictable_blocks
+
+        return available_blocks >= blocks_needed
 
     def can_allocate_request(self, token_ids: List[int]) -> bool:
         if self.prefix_cache:
