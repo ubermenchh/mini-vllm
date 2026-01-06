@@ -156,7 +156,7 @@ class ModelExecutor:
 
         attn_outputs = []
 
-        if executor.is_prefill:
+        if seq_len > 1: #executor.is_prefill:
             # PREFILL PHASE - Chunked
             for i in range(batch_size):
                 start_pos = executor.start_pos[i].item()
@@ -207,7 +207,8 @@ class ModelExecutor:
 
                 k_chunk = key[i]
                 v_chunk = value[i]
-                for t in range(chunk_len):
+                actual_chunk_len = executor.context_lens[i].item() - start_pos
+                for t in range(actual_chunk_len):
                     abs_pos = start_pos + t
                     block_idx = block_table[abs_pos // executor.block_size]
                     offset = abs_pos % executor.block_size

@@ -68,8 +68,8 @@ class LLMEngine:
                 context_lens_list.append(start_pos + num_tokens)
             else:
                 # decode phase
-                input_ids_list.append(seq.get_token_ids()[-1])
-                position_ids_list.append(seq.get_len() - 1)
+                input_ids_list.append([seq.get_token_ids()[-1]])
+                position_ids_list.append([seq.get_len() - 1])
                 start_pos_list.append(seq.get_len() - 1)
                 context_lens_list.append(seq.get_len())
 
@@ -78,24 +78,18 @@ class LLMEngine:
         max_num_blocks = max([len(block_table) for block_table in block_tables_list])
         pad_id = self.tokenizer.pad_token_id if self.tokenizer.pad_token_id is not None else 0
 
-        if is_prefill:
-            # input_tensor: [batch_size, max_seq_len]
-            input_tensor = torch.nn.utils.rnn.pad_sequence(
-                [torch.tensor(ids) for ids in input_ids_list],
-                batch_first=True,
-                padding_value=pad_id
-            ).to(self.device)
-            # position_tensor: [batch_size, max_seq_len]
-            position_tensor = torch.nn.utils.rnn.pad_sequence(
-                [torch.tensor(ids) for ids in position_ids_list],
-                batch_first=True,
-                padding_value=0
-            ).to(self.device)
-        else:
-            # input_tensor: [batch_size, 1]
-            input_tensor = torch.tensor(input_ids_list, device=self.device, dtype=torch.long).unsqueeze(1) 
-            # position_tensor: [batch_size, 1]
-            position_tensor = torch.tensor(position_ids_list, device=self.device, dtype=torch.long).unsqueeze(1)
+        # input_tensor: [batch_size, 1]
+        input_tensor = torch.nn.utils.rnn.pad_sequence(
+            [torch.tensor(ids) for ids in input_ids_list],
+            batch_first=True,
+            padding_value=pad_id
+        ).to(self.device)
+        # position_tensor: [batch_size, 1]
+        position_tensor = torch.nn.utils.rnn.pad_sequence(
+            [torch.tensor(ids) for ids in position_ids_list],
+            batch_first=True,
+            padding_value=0
+        ).to(self.device)
 
         padded_block_tables = []
         for blocks in block_tables_list:
