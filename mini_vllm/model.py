@@ -85,13 +85,33 @@ class ModelExecutor:
             return self._paged_attention_forward(module, hidden_states, *args, **kwargs)
         return forward_wrapper
 
-    def forward(self, input_ids: torch.Tensor, position_ids: torch.Tensor, context_lens: torch.Tensor, block_tables: torch.Tensor, is_prefill: bool=False):
+    def forward(self, input_ids: torch.Tensor, position_ids: torch.Tensor, context_lens: torch.Tensor, 
+                block_tables: torch.Tensor, is_prefill: bool=False, start_pos: torch.Tensor=None):
         self.context_lens = context_lens
         self.block_tables = block_tables
         self.is_prefill = is_prefill
+        self.start_pos = start_pos
 
         outputs = self.model(input_ids=input_ids, position_ids=position_ids)
         return outputs.logits
+
+    def _chunked_attention(self, query, key, value, start_pos):
+        head_dim = query.shape[-1]
+        chunk_len = query.shape[2]
+        kv_len = key.shape[2]
+
+        scale = 1.0 / (head_dim ** 0.5)
+        scores = torch.matmul(query, key.transpose(-1, -2)) * scale
+
+        mask = torch.ones(chunk_len, kv_len, device=query.device, dtype=torch.bool)
+        for i in range(chunk_len):
+            q_pos = start_pos + i
+            mask[i, q_pos+1:] = False
+
+        scores = scores.masked_fill(~mask, float("-inf"))
+        attn_weights = torch.softmax(scores, dim=-1, dtype=torch.float32).to(query.dtype)
+        output = torch.matmul(attn_weights, value)
+        return output
 
     def _paged_attention_forward(self, module, hidden_states: torch.Tensor, *args, **kwargs):
         # hidden_states: [batch_size, seq_len, hidden_size]
@@ -134,30 +154,67 @@ class ModelExecutor:
         k_cache = executor.kv_cache[layer_idx][0]
         v_cache = executor.kv_cache[layer_idx][1]
 
-        if executor.is_prefill:
-            # PREFILL PHASE: Write prompt to cache
-            if executor.num_kv_heads != executor.num_heads:
-                key_expanded = torch.repeat_interleave(key, executor.num_heads // executor.num_kv_heads, dim=1)
-                value_expanded = torch.repeat_interleave(value, executor.num_heads // executor.num_kv_heads, dim=1)
-                attn_output = torch.nn.functional.scaled_dot_product_attention(query, key_expanded, value_expanded, is_causal=True)
-            else:
-                attn_output = torch.nn.functional.scaled_dot_product_attention(query, key, value, is_causal=True)
+        attn_outputs = []
 
+        if executor.is_prefill:
+            # PREFILL PHASE - Chunked
             for i in range(batch_size):
-                length = executor.context_lens[i]
+                start_pos = executor.start_pos[i].item()
+                chunk_len = seq_len
+                end_pos = start_pos + chunk_len
                 block_table = executor.block_tables[i]
 
-                # k_seq: [seq_len, num_kv_heads, head_dim]
-                k_seq = key[i, :, :length, :].permute(1, 0, 2)
-                v_seq = value[i, :, :length, :].permute(1, 0, 2)
+                if start_pos > 0:
+                    cached_k_list = []
+                    cached_v_list = []
+                    for t in range(start_pos):
+                        block_idx = block_table[t // executor.block_size]
+                        offset = t % executor.block_size
+                        # [num_kv_heads, head_dim]
+                        cached_k_list.append(k_cache[block_idx, :, offset, :])
+                        cached_v_list.append(v_cache[block_idx, :, offset, :])
 
-                for t in range(length):
-                    block_indices = block_table[t // executor.block_size]
-                    block_offsets = t % executor.block_size
-                    
-                    k_cache[block_indices, :, block_offsets, :] = k_seq[t]
-                    v_cache[block_indices, :, block_offsets, :] = v_seq[t]
+                    # [start_pos, num_kv_heads, head_dim]
+                    cached_k = torch.stack(cached_k_list, dim=0)
+                    cached_v = torch.stack(cached_v_list, dim=0)
+
+                    # [num_kv_heads, start_pos, head_dim]
+                    cached_k = cached_k.permute(1, 0, 2)
+                    cached_v = cached_v.permute(1, 0, 2)
+
+                    # key[i] -> [num_kv_heads, ]
+                    key_full = torch.cat([cached_k, key[i]], dim=1)
+                    value_full = torch.cat([cached_v, value[i]], dim=1)
+                else:
+                    key_full = key[i]
+                    value_full = value[i]
+
+                if executor.num_kv_heads != executor.num_heads:
+                    key_exp = torch.repeat_interleave(key_full.unsqueeze(0), executor.num_heads // executor.num_kv_heads, dim=1)
+                    value_exp = torch.repeat_interleave(value_full.unsqueeze(0), executor.num_heads // executor.num_kv_heads, dim=1)
+                else:
+                    key_exp = key_full.unsqueeze(0)
+                    value_exp = value_full.unsqueeze(0)
+
+                q_i = query[i:i+1]
+
+                attn_out = self._chunked_attention(q_i, key_exp, value_exp, start_pos)
+                
+                if i == 0:
+                    attn_outputs = [attn_out]
+                else:
+                    attn_outputs.append(attn_out)
+
+                k_chunk = key[i]
+                v_chunk = value[i]
+                for t in range(chunk_len):
+                    abs_pos = start_pos + t
+                    block_idx = block_table[abs_pos // executor.block_size]
+                    offset = abs_pos % executor.block_size
+                    k_cache[block_idx, :, offset, :] = k_chunk[:, t, :]
+                    v_cache[block_idx, :, offset, :] = v_chunk[:, t, :]
             
+            attn_output = torch.cat(attn_outputs, dim=0)
             # attn_output: [batch_size, heads, seq_len, head_dim]
             attn_output = attn_output.transpose(1, 2).contiguous()
             if hasattr(module, "c_proj"):

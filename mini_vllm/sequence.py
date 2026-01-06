@@ -1,6 +1,7 @@
 from enum import Enum
 from typing import List, Optional
 
+
 class SequenceStatus(Enum):
     WAITING = 1
     RUNNING = 2
@@ -18,6 +19,7 @@ class Sequence:
         self.prompt_token_ids = prompt_token_ids
         self.output_token_ids = []
         self.status = SequenceStatus.WAITING
+        self.num_prefilled_tokens = 0
 
     def append_token_id(self, token_id: int, logprob: float) -> None:
         self.output_token_ids.append(token_id)
@@ -27,6 +29,17 @@ class Sequence:
 
     def get_token_ids(self):
         return self.prompt_token_ids + self.output_token_ids
+
+    def get_next_prefill_chunks(self, chunk_size: int) -> List[int]:
+        start = self.num_prefilled_tokens
+        end = min(start + chunk_size, len(self.prompt_token_ids))
+        return self.prompt_token_ids[start:end]
+
+    def is_prefill_complete(self) -> bool:
+        return self.num_prefilled_tokens >= len(self.prompt_token_ids)
+
+    def get_num_computed_tokens(self) -> int:
+        return self.num_prefilled_tokens + len(self.output_token_ids)
 
 class SequenceGroup:
     def __init__(

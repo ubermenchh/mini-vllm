@@ -57,6 +57,9 @@ class BlockSpaceManager:
         self.block_tables: Dict[int, List[PhysicalTokenBlock]] = {}
         self.cached_blocks: OrderedDict[int, PhysicalTokenBlock] = OrderedDict()
 
+        self.cache_hits = 0
+        self.cache_misses = 0
+
     def _compute_block_hash(self, token_ids: List[int]) -> int:
         return hash(tuple(token_ids))
 
@@ -88,11 +91,13 @@ class BlockSpaceManager:
 
                 if content_hash in self.cached_blocks:
                     logger.info(f"CACHE HIT: block {i//block_size} for seq {seq_id}")
+                    self.cache_hits += 1
                     block = self.cached_blocks[content_hash]
                     block.ref_count += 1
                     self.cached_blocks.move_to_end(content_hash)
                 else:
                     logger.info(f"CACHE MISS: block {i//block_size} for seq {seq_id}")
+                    self.cache_misses += 1
                     if self.allocator.get_num_free_blocks() == 0:
                         if not self._evict_one_block():
                             raise RuntimeError("OOM: no blocks to evict")
@@ -185,3 +190,28 @@ class BlockSpaceManager:
         if seq_id not in self.block_tables:
             return []
         return [block.block_num for block in self.block_tables[seq_id]]
+
+    def get_cache_stats(self) -> dict:
+        total = self.cache_hits + self.cache_misses
+        hit_rate = self.cache_hits / total if total > 0 else 0.0
+
+        return {
+            "hits": self.cache_hits,
+            "misses": self.cache_misses,
+            "hit_rate": hit_rate,
+            "cached_blocks": len(self.cached_blocks)
+        }
+
+    def can_allocate_blocks(self, num_blocks: int) -> bool:
+        return self.allocator.get_num_free_blocks() >= num_blocks
+
+    def allocate_initial_blocks(self, seq_id: int, num_blocks: int):
+        blocks = [self.allocator.allocate() for _ in range(num_blocks)]
+        self.block_tables[seq_id] = blocks
+
+    def append_blocks(self, seq_id: int, num_blocks: int):
+        if seq_id not in self.block_tables:
+            raise ValueError(f"Sequence {seq_id} not found")
+
+        for _ in range(num_blocks):
+            self.block_tables[seq_id].append(self.allocator.allocate())

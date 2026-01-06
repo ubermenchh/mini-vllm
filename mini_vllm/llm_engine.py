@@ -36,28 +36,43 @@ class LLMEngine:
 
     @torch.inference_mode()
     def step(self):
-        running_groups = self.scheduler.schedule()
+        scheduler_output = self.scheduler.schedule()
+        running_groups = scheduler_output.scheduled_groups
         if not running_groups:
             return {}
 
         first_seq = running_groups[0].get_seqs()[0]
-        is_prefill = len(first_seq.output_token_ids) == 0
+        is_prefill = first_seq.seq_id in scheduler_output.num_prefill_tokens
 
         input_ids_list = []
         position_ids_list = []
         context_lens_list = []
         block_tables_list = []
+        start_pos_list = []
 
         for group in running_groups:
             seq = group.get_seqs()[0]
-            
-            if is_prefill:
-                input_ids_list.append(seq.get_token_ids())
-                position_ids_list.append(list(range(seq.get_len())))
+
+            if seq.seq_id in scheduler_output.num_prefill_tokens:
+                # prefill phase
+                num_tokens = scheduler_output.num_prefill_tokens[seq.seq_id]
+                start_pos = seq.num_prefilled_tokens
+
+                chunk_tokens = seq.prompt_token_ids[start_pos:start_pos + num_tokens]
+                chunk_pos = list(range(start_pos, start_pos + num_tokens))
+
+                input_ids_list.append(chunk_tokens)
+                position_ids_list.append(chunk_pos)
+                start_pos_list.append(start_pos)
+
+                context_lens_list.append(start_pos + num_tokens)
             else:
+                # decode phase
                 input_ids_list.append(seq.get_token_ids()[-1])
                 position_ids_list.append(seq.get_len() - 1)
-            context_lens_list.append(seq.get_len())
+                start_pos_list.append(seq.get_len() - 1)
+                context_lens_list.append(seq.get_len())
+
             block_tables_list.append(self.block_manager.get_block_table(seq.seq_id))
 
         max_num_blocks = max([len(block_table) for block_table in block_tables_list])
@@ -74,7 +89,7 @@ class LLMEngine:
             position_tensor = torch.nn.utils.rnn.pad_sequence(
                 [torch.tensor(ids) for ids in position_ids_list],
                 batch_first=True,
-                padding_value=pad_id
+                padding_value=0
             ).to(self.device)
         else:
             # input_tensor: [batch_size, 1]
@@ -91,13 +106,24 @@ class LLMEngine:
         context_lens_tensor = torch.tensor(context_lens_list, device=self.device, dtype=torch.int64)   
         # block_tables_tensor: [batch_size, max_num_blocks]
         block_tables_tensor = torch.tensor(padded_block_tables, device=self.device, dtype=torch.int64) 
+        start_pos_tensor = torch.tensor(start_pos_list, device=self.device, dtype=torch.int64)
 
         # logits: [batch_size, seq_len, vocab_size]
-        logits = self.model_executor.forward(input_tensor, position_tensor, context_lens_tensor, block_tables_tensor, is_prefill)
+        logits = self.model_executor.forward(
+            input_tensor, position_tensor, context_lens_tensor, 
+            block_tables_tensor, is_prefill, start_pos_tensor
+        )
 
         outputs = {}
         for i, group in enumerate(running_groups):
             seq = group.get_seqs()[0]
+
+            if seq.seq_id in scheduler_output.num_prefill_tokens:
+                seq.num_prefilled_tokens += scheduler_output.num_prefill_tokens[seq.seq_id]
+
+                if not seq.is_prefill_complete():
+                    outputs[group.request_id] = self.tokenizer.decode(seq.prompt_token_ids[:seq.num_prefilled_tokens])
+                    continue
     
             # logit_idx = (context_lens_list[i] - 1) if is_prefill else 0
             next_token_logits = logits[i, -1, :] # Shape: [vocab_size]

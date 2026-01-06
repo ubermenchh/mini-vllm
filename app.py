@@ -141,20 +141,29 @@ class InferenceEngine:
 
 @app.local_entrypoint()
 def main():
-    # prompt = [
-    #     "The meaning of life is to find",
-    #     "The meaning of life is to give"
-    # ]
+    # Long context to trigger chunked prefill (>512 tokens)
+    long_context = """Machine learning is a subset of artificial intelligence that enables systems to learn and improve from experience without being explicitly programmed. It focuses on developing computer programs that can access data and use it to learn for themselves. The process begins with observations or data, such as examples, direct experience, or instruction, to look for patterns in data and make better decisions in the future.
+
+The primary aim is to allow computers to learn automatically without human intervention or assistance and adjust actions accordingly. Machine learning algorithms are often categorized as supervised or unsupervised. Supervised learning algorithms can apply what has been learned in the past to new data using labeled examples to predict future events.
+
+Deep learning is a subset of machine learning that uses neural networks with many layers. These deep neural networks attempt to simulate the behavior of the human brain in processing data for use in decision making. Deep learning is especially useful for image recognition, natural language processing, and speech recognition.
+
+Reinforcement learning is another paradigm where an agent learns to make decisions by taking actions in an environment to maximize cumulative reward. Unlike supervised learning, reinforcement learning does not require labeled input/output pairs and does not require sub-optimal actions to be explicitly corrected.
+
+Transfer learning is a machine learning method where a model developed for one task is reused as the starting point for a model on a second task. It is a popular approach in deep learning where pre-trained models are used as the starting point for computer vision and natural language processing tasks.
+
+Neural networks are computing systems inspired by biological neural networks that constitute animal brains. These systems learn to perform tasks by considering examples, generally without being programmed with task-specific rules. They consist of layers of interconnected nodes or neurons that process information using connectionist approaches to computation."""
+
     prompt = [
-        "You are a helpful AI assistant. You always provide detailed, accurate, and thoughtful answers to questions. Please explain the concept of gravity.",
-        "You are a helpful AI assistant. You always provide detailed, accurate, and thoughtful answers to questions. Please describe how plants grow.",
+        f"{long_context}\n\nBased on the above context, explain what is gradient descent and how it is used in training neural networks. Answer:",
     ]
-    logger.info(f"Sending prompt: '{prompt}'")
+    
+    logger.info(f"Prompt token count (approx): {len(prompt[0].split())}")
 
     engine = InferenceEngine()
     results = engine.generate_batch.remote(prompt)
     for req_id, text in results["texts"].items():
-        logger.info(f"[{req_id}]: {text}")
+        logger.info(f"[{req_id}]: ...{text[-800:]}")  # Print last 800 chars
 
     # logger.info("--- Result ---")
     # logger.info(f"Output: {result['text']}")
