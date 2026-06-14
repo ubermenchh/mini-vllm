@@ -36,15 +36,8 @@ class Scheduler:
                 logger.info(f"CHUNK: seq={seq.seq_id}, start={seq.num_prefilled_tokens}, chunk_len={len(chunk_tokens)}, total_prompt={len(seq.prompt_token_ids)}")
                 num_tokens = len(chunk_tokens)
 
-                current_blocks = (seq.num_prefilled_tokens + BLOCK_SIZE - 1) // BLOCK_SIZE
-                needed_blocks = (seq.num_prefilled_tokens + num_tokens + BLOCK_SIZE - 1) // BLOCK_SIZE
-                num_blocks_needed = needed_blocks - current_blocks
-
-                if num_blocks_needed == 0 or self.block_manager.can_allocate_blocks(num_blocks_needed):
-                    if num_blocks_needed > 0:
-                        self.block_manager.append_blocks(seq.seq_id, num_blocks_needed)
-                    output.num_prefill_tokens[seq.seq_id] = num_tokens
-                    output.scheduled_groups.append(seq_group)
+                output.num_prefill_tokens[seq.seq_id] = num_tokens
+                output.scheduled_groups.append(seq_group)
 
             else:
                 output.num_decode_tokens[seq.seq_id] = 1
@@ -54,14 +47,12 @@ class Scheduler:
             seq_group = self.waiting[0]
             seq = seq_group.get_seqs()[0]
 
-            first_chunk = seq.get_next_prefill_chunks(chunk_size)
-            blocks_needed = (len(first_chunk) + BLOCK_SIZE - 1) // BLOCK_SIZE
-
-            if self.block_manager.can_allocate_blocks(blocks_needed):
+            if self.block_manager.can_allocate_request(seq.prompt_token_ids):
                 self.waiting.popleft()
-                self.block_manager.allocate_initial_blocks(seq.seq_id, blocks_needed)
+                self.block_manager.allocate_request(seq.seq_id, seq.prompt_token_ids)
                 self.running.append(seq_group)
                 
+                first_chunk = seq.get_next_prefill_chunks(chunk_size)
                 output.num_prefill_tokens[seq.seq_id] = len(first_chunk)
                 output.scheduled_groups.append(seq_group)
             else:

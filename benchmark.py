@@ -40,7 +40,6 @@ vllm_image = (
 MODEL_NAME = "meta-llama/Llama-3.2-1B"
 GPU_CONFIG = "A100"
 
-# Longer prompt to ensure prefill phase completes before decode begins across all sequences
 PROMPT = """Machine learning is a subset of artificial intelligence that enables systems to learn and improve from experience without being explicitly programmed. It focuses on developing computer programs that can access data and use it to learn for themselves. The process begins with observations or data, such as examples, direct experience, or instruction, to look for patterns in data and make better decisions in the future.
 
 The primary aim is to allow computers to learn automatically without human intervention or assistance and adjust actions accordingly. Machine learning algorithms are often categorized as supervised or unsupervised. Supervised learning algorithms can apply what has been learned in the past to new data using labeled examples to predict future events.
@@ -48,6 +47,8 @@ The primary aim is to allow computers to learn automatically without human inter
 Deep learning is a subset of machine learning that uses neural networks with many layers. These deep neural networks attempt to simulate the behavior of the human brain in processing data for use in decision making.
 
 Question: What is the meaning of life? Answer:"""
+
+# PROMPT = "The meaning of life is"
 
 
 @app.cls(
