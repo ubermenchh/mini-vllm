@@ -1,10 +1,21 @@
 # mini-vllm
 
 <p align="center">
-  <img src="assets/mini-vllm.png" alt="mini-vllm banner" width="800">
+  <img src="assets/mini-vllm.png" alt="mini-vllm: a smiling GPU whose memory fills with colored KV-cache blocks, next to a block table" width="800">
 </p>
 
 A minimal implementation of vLLM's core ideas: PagedAttention and continuous batching.
+
+## About
+
+mini-vllm is a small, readable LLM inference engine (~900 lines of Python), built to learn how vLLM works inside. It runs Hugging Face models such as Llama 3.2 and includes:
+
+- **PagedAttention**: the KV cache is stored in fixed-size blocks, and a Triton kernel reads them through per-sequence block tables.
+- **Continuous batching**: the scheduler adds and removes requests at every step, so the batch never waits for its slowest request.
+- **Chunked prefill**: long prompts are processed in chunks so they do not block decoding for other requests.
+- **Prefix caching**: KV blocks are hashed, so requests that share a prompt prefix reuse the same blocks.
+
+It is for learning, not production. vLLM is 4–20x faster (see [Benchmarks](#benchmarks)).
 
 ## Installation
 
